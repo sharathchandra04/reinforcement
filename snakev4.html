@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Snake Game</title>
+  <style>
+    canvas {
+      background: #000;
+      display: block;
+      margin: 40px auto;
+      border: 2px solid #fff;
+    }
+    body {
+      text-align: center;
+      font-family: Arial, sans-serif;
+      color: white;
+      background: #111;
+    }
+    h1 {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🐍 Snake Game</h1>
+  <p>Use arrow keys to move</p>
+  <canvas id="game" width="700" height="700"></canvas>
+  <p id="score">Score: 0</p>
+  <p id="gameOver" style="color:red;"></p>
+  <p id="restartBtn" style="color:red;"></p>
+
+  <script>
+    const socket = new WebSocket("ws://localhost:8765");
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    const tileCount = 8; //40
+    const tileSize = canvas.width / tileCount;
+    const lr = 500
+    snake = [
+      { x: 4, y: 4 }
+    ];
+
+    let food = randomFood();
+    let direction = { x: 0, y: -1 };
+    let lastDirection = { x: 0, y: 0 };
+    let gameOver = false;
+    let gameRunning = false;
+    let gameTimeout; // to store the timeout ID
+    let score = 0;
+    let loopid = 1;
+    let badReward = -10;
+    let goodReward = 100;
+    let normalReward = 0;
+    let reward;
+    let reasonOfD;
+    let curr_state;
+    let count=0;
+    let restarted =false;
+    
+    function keyPush(e) {
+      let move = false;
+      let option = e.key;
+      let k = ['left', 'straight', 'right']
+      
+      const map = {
+        'up': ["ArrowLeft", "ArrowUp", "ArrowRight"],
+        'left': ["ArrowDown", "ArrowLeft", "ArrowUp"],
+        'down': ["ArrowRight", "ArrowDown", "ArrowLeft"],
+        'right': ["ArrowUp", "ArrowRight", "ArrowDown"]
+      }
+      let action = ''
+      if(lastDirection.x==0 && lastDirection.y==-1){
+        // last direction : going up 0, -1
+        action = map['up'][option-1]
+      } else if(lastDirection.x==0 && lastDirection.y==1){
+        // last direction : going down 0 1
+        action = map['down'][option-1]
+      } else if(lastDirection.x==-1 && lastDirection.y==0){
+        // last direction : going left -1 0
+        action = map['left'][option-1]
+      } else if(lastDirection.x==1 && lastDirection.y==0){
+        // last direction : going right 1 0
+        action = map['right'][option-1]
+      }
+      // console.log(k[option-1], action)
+      switch (action) {
+        case "ArrowUp":
+          if (lastDirection.y === 0 ||  lastDirection.y === -1){
+            direction = { x: 0, y: -1 };
+            move = true;
+          } 
+          break;
+        case "ArrowDown":
+          if (lastDirection.y === 0 ||  lastDirection.y === 1) {
+            direction = { x: 0, y: 1 };
+            move = true;
+          }
+          break;
+        case "ArrowLeft":
+          if (lastDirection.x === 0 || lastDirection.x === -1){
+            direction = { x: -1, y: 0 };
+            move = true;
+          } 
+          break;
+        case "ArrowRight":
+          if (lastDirection.x === 0 || lastDirection.x === 1){
+            direction = { x: 1, y: 0 };
+            move = true;
+          } 
+          break;
+      }
+
+      if (move == true || restarted == true){
+        restarted=false;
+        function kk(li){
+          console.log('inside kk')
+          update(li);
+          draw();
+        }
+        // let train=true
+        let train=false
+        if(!train){
+          setTimeout(() => kk(loopid), 100);
+        } else {
+          update(loopid);
+          draw();
+        }
+      }
+    }
+    
+    function manhattanDistance(head, food) {
+      const up = (food.x === head.x && food.y < head.y) ? head.y - food.y : -1;
+      const down = (food.x === head.x && food.y > head.y) ? food.y - head.y : -1;
+      const left = (food.y === head.y && food.x < head.x) ? head.x - food.x : -1;
+      const right = (food.y === head.y && food.x > head.x) ? food.x - head.x : -1;
+
+      const manhattan = Math.abs(head.x - food.x) + Math.abs(head.y - food.y);
+
+      return [up, down, left, right, manhattan];
+    }
+    function dangerStateCal(snake, direction) {
+      const head = snake[0];
+      const dangerStateList = [
+        head.x,                        // Distance to left wall
+        tileCount - 1 - head.x,        // Distance to right wall
+        head.y,                        // Distance to top wall
+        tileCount - 1 - head.y         // Distance to bottom wall
+      ];
+      return dangerStateList;
+    }
+
+    function sendtosock(snake1, food, reward, loopid, direction, ldirection ){
+      const snake = snake1;
+      const head = snake[0];
+      const distance = manhattanDistance(head, food);
+      const dangerState = dangerStateCal(snake, direction);
+      count+=1;
+      if(count%100 == 0) console.log('at 100 --> ', count);
+      socket.send(JSON.stringify({ reward, head, snake, food, 
+        loopid, distance, tileCount, direction, ldirection: lastDirection, reasonOfD, dangerState, code: 2 }));
+    }
+
+    function restartGame() {
+      snake = [
+        { x: 4, y: 4 }
+      ];
+      directions = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: 1, y: 0 }]
+      let randomNumber = Math.floor(Math.random() * 3);
+      direction = directions[randomNumber]
+      lastDirection = { x: 0, y: 0 };
+      food = randomFood();
+      score = 0;
+      document.getElementById("score").textContent = "Score: 0";
+      document.getElementById("gameOver").textContent = "";
+      document.getElementById("restartBtn").style.display = "none";
+      gameRunning = true;
+      gameOver = false;
+      loopid = loopid + 1
+      restarted = true
+      // gameLoop(loopid);
+      // update(loopid)
+      draw();
+    }
+
+    function update(loopid) {
+      if (direction.x === 0 && direction.y === 0) return;
+
+      const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+      // Wall collision
+      if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+        snake.unshift(head);
+        snake.pop();
+        reward = badReward
+        reasonOfD = 1
+        sendtosock(snake, food, reward, loopid, direction, lastDirection)
+        endGame();
+        return;
+      }
+      // Self collision
+      for (let part of snake) {
+        if (head.x === part.x && head.y === part.y) {
+          snake.unshift(head);
+          snake.pop();
+          reward = badReward
+          reasonOfD = 0
+          sendtosock(snake, food, reward, loopid, direction, lastDirection)
+          endGame();
+          return;
+        }
+      }
+      snake.unshift(head);
+      // Eat food
+      if (head.x === food.x && head.y === food.y) {
+        score++;
+        reward = goodReward
+        sendtosock(snake, food, reward, loopid, direction, lastDirection)
+        food = randomFood();
+      } else {
+        reward = normalReward
+        snake.pop();
+        sendtosock(snake, food, reward, loopid, direction, lastDirection)
+      }
+      lastDirection = direction;
+    }
+
+    function draw() {
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = "#222"; // subtle grid color
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= tileCount; i++) {
+        // Vertical lines
+        ctx.beginPath();
+        ctx.moveTo(i * tileSize, 0);
+        ctx.lineTo(i * tileSize, canvas.height);
+        ctx.stroke();
+
+        // Horizontal lines
+        ctx.beginPath();
+        ctx.moveTo(0, i * tileSize);
+        ctx.lineTo(canvas.width, i * tileSize);
+        ctx.stroke();
+      }
+      // Draw snake
+      ctx.fillStyle = "lime";
+      for (let part of snake) {
+        ctx.fillRect(part.x * tileSize, part.y * tileSize, tileSize - 1, tileSize - 1);
+      }
+
+      // Draw food
+      ctx.fillStyle = "red";
+      ctx.fillRect(food.x * tileSize, food.y * tileSize, tileSize - 1, tileSize - 1);
+    }
+
+    function randomFood() {
+      let newFood;
+      while (true) {
+        newFood = {
+          x: Math.floor(Math.random() * tileCount),
+          y: Math.floor(Math.random() * tileCount)
+        };
+        // Avoid placing food on the snake
+        if (!snake.some(part => part.x === newFood.x && part.y === newFood.y)) break;
+      }
+      return newFood;
+    }
+
+    function endGame() {
+      gameOver = true;
+      gameRunning = false;
+      document.getElementById("gameOver").textContent = "💀 Game Over!";
+      document.getElementById("restartBtn").style.display = "inline";
+      restartGame();
+    }
+    
+    gameRunning = true;
+    socket.addEventListener("open", () => {
+      gameRunning = true;
+      update(loopid);
+      draw();
+      socket.send(JSON.stringify({ msg: "started loop!", code: 1 }));
+    });
+    socket.addEventListener("message", (event) => {
+      let action = JSON.parse(event.data).action
+      keyPush({key: action})
+    });
+    socket.addEventListener("close", () => {
+      console.log("❌ Disconnected");
+    });
+  </script>
+</body>
+</html>
+
+0 episodes ------> 30 push for success
+1100 episodes ---> 45k steps, 7 push for success
+150 episodes ----> 63k steps, 2 push for success, epsilon decrease.
