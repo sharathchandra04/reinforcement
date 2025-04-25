@@ -6,6 +6,14 @@ python RL1-no-move-rewv4.py --relearn 1 --model_number 204000 (for transfer lear
 python test.py --relearn 1 --model_number 204000 (test the performance for a model)
 
 
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/bf680b39-9a09-40f7-a4ee-8dbabcecd3b8/three.webm" width="40%" autoplay loop muted></video>
-</p>
+
+https://github.com/user-attachments/assets/c583f097-5741-42b5-862a-77478faa67bf
+
+
+
+https://github.com/user-attachments/assets/3f5af5aa-83e0-4eec-b601-703cd50ff362
+
+
+
+https://github.com/user-attachments/assets/07ffbfe2-0e40-4a64-878c-6a3194f7031d
+
